@@ -4,15 +4,22 @@ if (window.location.protocol === 'file:') {
 
 if (!window.L || !window.turf) {
   const statusEl = document.getElementById('status');
-  if (statusEl) {
-    statusEl.textContent = 'Failed to load map libraries. Check internet access, then refresh.';
-  }
+  if (statusEl) statusEl.textContent = 'Failed to load map libraries. Check internet access, then refresh.';
   throw new Error('Leaflet/Turf failed to load');
 }
 
 let map;
 let marker;
 let analysisCircle;
+let overlayBuildings;
+let overlayPavedRoads;
+let overlayUnpavedRoads;
+
+let cachedFeatures = {
+  buildings: [],
+  pavedRoads: [],
+  unpavedRoads: []
+};
 
 const goToLocationBtn = document.getElementById('goToLocation');
 const analyzeBtn = document.getElementById('analyze');
@@ -20,6 +27,10 @@ const statusEl = document.getElementById('status');
 const radiusInput = document.getElementById('radius');
 const unitsInput = document.getElementById('units');
 const locationInput = document.getElementById('location');
+
+const showBuildingsInput = document.getElementById('showBuildings');
+const showPavedRoadsInput = document.getElementById('showPavedRoads');
+const showUnpavedRoadsInput = document.getElementById('showUnpavedRoads');
 
 initializeMap();
 
@@ -29,6 +40,10 @@ locationInput.addEventListener('keydown', (event) => {
     goToLocationBtn.click();
   }
 });
+
+showBuildingsInput.addEventListener('change', redrawOverlayLayers);
+showPavedRoadsInput.addEventListener('change', redrawOverlayLayers);
+showUnpavedRoadsInput.addEventListener('change', redrawOverlayLayers);
 
 goToLocationBtn.addEventListener('click', async () => {
   try {
@@ -47,7 +62,6 @@ goToLocationBtn.addEventListener('click', async () => {
     marker.setLatLng([location.lat, location.lng]);
     map.setView([location.lat, location.lng], getZoomLevel(radiusMeters));
     updateAnalysisCircle();
-
     setStatus(`Moved to ${location.label}. Click Analyze when ready.`);
   } catch (error) {
     setStatus(`Location search failed: ${error.message}`);
@@ -68,9 +82,13 @@ analyzeBtn.addEventListener('click', async () => {
     const overpassData = await fetchOverpass(center.lat, center.lng, radiusMeters);
 
     setStatus('Calculating area metrics...');
-    const metrics = calculateMetrics(overpassData, center.lat, center.lng, radiusMeters);
+    const { metrics, features } = calculateMetricsAndFeatures(overpassData, center.lat, center.lng, radiusMeters);
+    cachedFeatures = features;
+
     renderMetrics(metrics, radiusMeters);
-    setStatus('Analysis complete.');
+    redrawOverlayLayers();
+
+    setStatus('Analysis complete. Toggle layers to view only buildings/paved/unpaved roads.');
   } catch (error) {
     setStatus(`Analysis failed: ${error.message}`);
   }
@@ -80,18 +98,11 @@ radiusInput.addEventListener('input', updateAnalysisCircle);
 unitsInput.addEventListener('change', updateAnalysisCircle);
 
 function initializeMap() {
-  map = L.map('map', {
-    center: [0, 0],
-    zoom: 2,
-    zoomControl: true
-  });
+  map = L.map('map', { center: [0, 0], zoom: 2, zoomControl: true });
 
-  L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    {
-      attribution: '&copy; Esri, Maxar, Earthstar Geographics'
-    }
-  ).addTo(map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri, Maxar, Earthstar Geographics'
+  }).addTo(map);
 
   marker = L.marker([0, 0], { draggable: true }).addTo(map);
   marker.on('dragend', () => {
@@ -107,6 +118,10 @@ function initializeMap() {
     fillOpacity: 0.18,
     weight: 2
   }).addTo(map);
+
+  overlayBuildings = L.layerGroup().addTo(map);
+  overlayPavedRoads = L.layerGroup().addTo(map);
+  overlayUnpavedRoads = L.layerGroup().addTo(map);
 
   map.on('click', (event) => {
     marker.setLatLng(event.latlng);
@@ -128,6 +143,44 @@ function initializeMap() {
   }
 }
 
+function redrawOverlayLayers() {
+  overlayBuildings.clearLayers();
+  overlayPavedRoads.clearLayers();
+  overlayUnpavedRoads.clearLayers();
+
+  if (showBuildingsInput.checked) {
+    for (const polygonCoords of cachedFeatures.buildings) {
+      L.polygon(polygonCoords, {
+        color: '#ffd166',
+        weight: 1,
+        fillColor: '#ffd166',
+        fillOpacity: 0.3
+      }).addTo(overlayBuildings);
+    }
+  }
+
+  if (showPavedRoadsInput.checked) {
+    for (const lineCoords of cachedFeatures.pavedRoads) {
+      L.polyline(lineCoords, {
+        color: '#4fd1c5',
+        weight: 3,
+        opacity: 0.95
+      }).addTo(overlayPavedRoads);
+    }
+  }
+
+  if (showUnpavedRoadsInput.checked) {
+    for (const lineCoords of cachedFeatures.unpavedRoads) {
+      L.polyline(lineCoords, {
+        color: '#ff6b6b',
+        weight: 3,
+        opacity: 0.95,
+        dashArray: '6 5'
+      }).addTo(overlayUnpavedRoads);
+    }
+  }
+}
+
 async function resolveLocationInput() {
   const input = locationInput.value.trim();
   if (!input) return null;
@@ -142,9 +195,7 @@ async function resolveLocationInput() {
   }
 
   const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(input)}`;
-  const response = await fetch(endpoint, {
-    headers: { Accept: 'application/json' }
-  });
+  const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
 
   if (!response.ok) throw new Error(`geocoder HTTP ${response.status}`);
   const results = await response.json();
@@ -167,9 +218,8 @@ function updateAnalysisCircle() {
   if (!map || !marker || !analysisCircle) return false;
 
   const radiusMeters = getRadiusMetersSafe();
-  const center = marker.getLatLng();
+  analysisCircle.setLatLng(marker.getLatLng());
 
-  analysisCircle.setLatLng(center);
   if (!radiusMeters) {
     analyzeBtn.disabled = true;
     return false;
@@ -200,14 +250,11 @@ out skel qt;
     headers: { 'Content-Type': 'text/plain' }
   });
 
-  if (!response.ok) {
-    throw new Error(`Overpass request failed (${response.status})`);
-  }
-
+  if (!response.ok) throw new Error(`Overpass request failed (${response.status})`);
   return response.json();
 }
 
-function calculateMetrics(overpassData, lat, lng, radiusMeters) {
+function calculateMetricsAndFeatures(overpassData, lat, lng, radiusMeters) {
   const nodes = new Map();
   const ways = new Map();
   const relations = [];
@@ -219,16 +266,22 @@ function calculateMetrics(overpassData, lat, lng, radiusMeters) {
   }
 
   const center = turf.point([lng, lat]);
-  const searchAreaSqKm = Math.PI * (radiusMeters / 1000) ** 2;
+  const radiusKm = radiusMeters / 1000;
+  const searchAreaSqKm = Math.PI * radiusKm ** 2;
 
   let buildingCount = 0;
   let roofedAreaSqM = 0;
   let pavedRoadKm = 0;
   let unpavedRoadKm = 0;
 
+  const buildings = [];
+  const pavedRoads = [];
+  const unpavedRoads = [];
+
   for (const way of ways.values()) {
     const coords = (way.nodes || []).map((id) => nodes.get(id)).filter(Boolean);
     if (coords.length < 2) continue;
+
     const tags = way.tags || {};
 
     if (tags.building) {
@@ -237,24 +290,32 @@ function calculateMetrics(overpassData, lat, lng, radiusMeters) {
         const polygon = turf.polygon([polygonCoords]);
         const centroid = turf.centroid(polygon);
         const distanceKm = turf.distance(center, centroid, { units: 'kilometers' });
-        if (distanceKm <= radiusMeters / 1000) {
+        if (distanceKm <= radiusKm) {
           buildingCount += 1;
           roofedAreaSqM += turf.area(polygon);
+          buildings.push(toLeafletCoords(polygonCoords));
         }
       }
     }
 
     if (tags.highway) {
       const line = turf.lineString(coords);
-      const midpoint = turf.along(line, turf.length(line, { units: 'kilometers' }) / 2, {
+      const mid = turf.along(line, turf.length(line, { units: 'kilometers' }) / 2, {
         units: 'kilometers'
       });
-      const distanceKm = turf.distance(center, midpoint, { units: 'kilometers' });
-      if (distanceKm > radiusMeters / 1000) continue;
+      const distanceKm = turf.distance(center, mid, { units: 'kilometers' });
+      if (distanceKm > radiusKm) continue;
 
       const lengthKm = turf.length(line, { units: 'kilometers' });
-      if (isPaved(tags.surface)) pavedRoadKm += lengthKm;
-      else unpavedRoadKm += lengthKm;
+      const leafletLine = toLeafletCoords(coords);
+
+      if (isPaved(tags.surface)) {
+        pavedRoadKm += lengthKm;
+        pavedRoads.push(leafletLine);
+      } else {
+        unpavedRoadKm += lengthKm;
+        unpavedRoads.push(leafletLine);
+      }
     }
   }
 
@@ -262,19 +323,31 @@ function calculateMetrics(overpassData, lat, lng, radiusMeters) {
     if (!relation.tags || !relation.tags.building) continue;
     const centerTag = relation.center;
     if (!centerTag) continue;
+
     const distanceKm = turf.distance(center, turf.point([centerTag.lon, centerTag.lat]), {
       units: 'kilometers'
     });
-    if (distanceKm <= radiusMeters / 1000) buildingCount += 1;
+    if (distanceKm <= radiusKm) buildingCount += 1;
   }
 
   return {
-    buildingCount,
-    buildingDensity: buildingCount / searchAreaSqKm,
-    roofedAreaSqM,
-    pavedRoadKm,
-    unpavedRoadKm
+    metrics: {
+      buildingCount,
+      buildingDensity: buildingCount / searchAreaSqKm,
+      roofedAreaSqM,
+      pavedRoadKm,
+      unpavedRoadKm
+    },
+    features: {
+      buildings,
+      pavedRoads,
+      unpavedRoads
+    }
   };
+}
+
+function toLeafletCoords(coords) {
+  return coords.map(([lon, lat]) => [lat, lon]);
 }
 
 function closeRing(coords) {
