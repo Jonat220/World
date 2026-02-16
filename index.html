@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoBuilt Analyzer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js" defer></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>GeoBuilt Analyzer</h1>
+      <p>
+        Satellite map analysis for building count, density, roofed area, paved roads,
+        and unpaved roads.
+      </p>
+    </header>
+
+    <main class="layout">
+      <aside class="controls">
+        <h2>Analyze Area</h2>
+
+        <label for="location">Coordinate or area address</label>
+        <input
+          id="location"
+          type="text"
+          placeholder="e.g. 37.7749,-122.4194 or Nairobi, Kenya"
+        />
+
+        <div class="row">
+          <div>
+            <label for="radius">Radius</label>
+            <input id="radius" type="number" value="1" min="0.1" step="0.1" />
+          </div>
+          <div>
+            <label for="units">Units</label>
+            <select id="units">
+              <option value="km">Kilometres</option>
+              <option value="mi">Miles</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button id="goToLocation">Go to Location</button>
+          <button id="analyze">Analyze</button>
+        </div>
+
+        <section class="results" id="results">
+          <h3>Results</h3>
+          <ul>
+            <li><strong>Buildings:</strong> <span id="buildingCount">-</span></li>
+            <li><strong>Building density:</strong> <span id="buildingDensity">-</span></li>
+            <li><strong>Roofed area:</strong> <span id="roofedArea">-</span></li>
+            <li><strong>Paved roads:</strong> <span id="pavedRoads">-</span></li>
+            <li><strong>Unpaved roads:</strong> <span id="unpavedRoads">-</span></li>
+          </ul>
+          <p class="note" id="status">Pan/zoom the map or search a location, then Analyze.</p>
+        </section>
+      </aside>
+
+      <section class="map-panel">
+        <div id="map"></div>
+      </section>
+    </main>
+
+    <noscript>
+      <p class="noscript">This app needs JavaScript enabled in your browser.</p>
+    </noscript>
+  </body>
+</html>
