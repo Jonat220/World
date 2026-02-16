@@ -1,0 +1,141 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --panel: #1b1f27;
+  --text: #edf2f7;
+  --accent: #4fd1c5;
+  --border: #2d3748;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.app-header p {
+  margin: 0.35rem 0 0;
+  color: #cbd5e0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  height: calc(100vh - 88px);
+}
+
+.controls {
+  padding: 1rem;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+.controls h2 {
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
+  color: #cbd5e0;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #111827;
+  color: var(--text);
+  padding: 0.65rem;
+  font-size: 0.95rem;
+}
+
+.row,
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.btn-row {
+  margin-top: 1rem;
+}
+
+button {
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.results {
+  margin-top: 1.2rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #111827;
+}
+
+.results ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.results li {
+  margin: 0.45rem 0;
+}
+
+.note {
+  margin: 0.8rem 0 0;
+  color: #90cdf4;
+  font-size: 0.9rem;
+}
+
+.map-panel {
+  min-height: 100%;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #0b0d10;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  #map {
+    height: 68vh;
+  }
+}
