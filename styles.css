@@ -139,3 +139,33 @@ button:disabled {
     height: 68vh;
   }
 }
+
+
+.layers {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #111827;
+}
+
+.layers h3 {
+  margin: 0 0 0.5rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.45rem 0;
+}
+
+.check input {
+  width: auto;
+  margin: 0;
+}
+
+.noscript {
+  margin: 1rem;
+  color: #fbd38d;
+}
